@@ -36,6 +36,22 @@ keeps working without depending on files DMS no longer ships. Nothing
 regenerates them automatically anymore -- if a future DMS version changes its
 color-role mapping, these need updating by hand.
 
+## Setting up on a new machine
+
+Requires `dms-shell`, `matugen`, `jq`, `wofi`, and Hyprland already installed.
+
+```
+git clone https://github.com/ethanlaeltan/dotfiles-theming.git ~/dotfiles-theming
+~/dotfiles-theming/install.sh
+```
+
+That symlinks this repo's contents into `~/.config/matugen`,
+`~/.config/colorschemes`, `~/.config/quickshell/themeswitcher`, and the
+`theme-*`/`dms-theme-switcher` scripts into `~/.local/bin`. It's safe to
+re-run; anything already at a destination that isn't already one of these
+symlinks gets backed up with a `.pre-dotfiles-theming` suffix rather than
+overwritten.
+
 ## Adding a new colorscheme
 
 Copy an existing `colorschemes/<name>/<name>.toml`, adjust its colors (and
