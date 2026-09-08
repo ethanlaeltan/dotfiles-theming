@@ -32,7 +32,7 @@ hl.monitor({
 
 -- Set programs that you use
 local terminal = "kitty"
-local fileManager = "nemo"
+local fileManager = "nautilus"
 local menu = "hyprlauncher"
 local browser = "firefox"
 local editor = "code-oss"
