@@ -1,0 +1,74 @@
+@define-color blue_1 {{colors.primary_container.default.hex}};
+@define-color blue_2 {{colors.primary.default.hex}};
+@define-color blue_3 {{colors.primary.default.hex}};
+@define-color blue_4 {{colors.primary.default.hex}};
+@define-color blue_5 {{colors.primary.default.hex}};
+
+@define-color green_1 {{colors.secondary_container.default.hex}};
+@define-color green_2 {{colors.secondary.default.hex}};
+@define-color green_3 {{colors.secondary.default.hex}};
+@define-color green_4 {{colors.secondary.default.hex}};
+@define-color green_5 {{colors.secondary.default.hex}};
+
+@define-color yellow_1 {{colors.tertiary_container.default.hex}};
+@define-color yellow_2 {{colors.tertiary.default.hex}};
+@define-color yellow_3 {{colors.tertiary.default.hex}};
+@define-color yellow_4 {{colors.tertiary.default.hex}};
+@define-color yellow_5 {{colors.tertiary.default.hex}};
+
+@define-color orange_1 {{colors.tertiary_container.default.hex}};
+@define-color orange_2 {{colors.tertiary.default.hex}};
+@define-color orange_3 {{colors.tertiary.default.hex}};
+@define-color orange_4 {{colors.tertiary.default.hex}};
+@define-color orange_5 {{colors.tertiary.default.hex}};
+
+@define-color red_1 {{colors.error_container.default.hex}};
+@define-color red_2 {{colors.error.default.hex}};
+@define-color red_3 {{colors.error.default.hex}};
+@define-color red_4 {{colors.error.default.hex}};
+@define-color red_5 {{colors.error.default.hex}};
+
+@define-color purple_1 {{colors.primary_container.default.hex}};
+@define-color purple_2 {{colors.primary.default.hex}};
+@define-color purple_3 {{colors.primary.default.hex}};
+@define-color purple_4 {{colors.primary.default.hex}};
+@define-color purple_5 {{colors.primary.default.hex}};
+
+@define-color accent_bg_color {{colors.primary.default.hex}};
+@define-color accent_fg_color {{colors.on_primary.default.hex}};
+
+@define-color destructive_bg_color {{colors.error.default.hex}};
+@define-color destructive_fg_color {{colors.on_error.default.hex}};
+
+@define-color success_bg_color {{colors.secondary.default.hex}};
+@define-color success_fg_color {{colors.on_secondary.default.hex}};
+
+@define-color warning_bg_color {{colors.tertiary.default.hex}};
+@define-color warning_fg_color {{colors.on_tertiary.default.hex}};
+
+@define-color error_bg_color {{colors.error.default.hex}};
+@define-color error_fg_color {{colors.on_error.default.hex}};
+
+@define-color window_bg_color {{colors.surface.default.hex}};
+@define-color window_fg_color {{colors.on_surface.default.hex}};
+
+@define-color view_bg_color {{colors.surface_container_lowest.default.hex}};
+@define-color view_fg_color {{colors.on_surface.default.hex}};
+
+@define-color headerbar_bg_color {{colors.surface_container.default.hex}};
+@define-color headerbar_fg_color {{colors.on_surface.default.hex}};
+
+@define-color sidebar_bg_color {{colors.surface_container.default.hex}};
+@define-color sidebar_fg_color {{colors.on_surface.default.hex}};
+
+@define-color card_bg_color {{colors.surface_container_high.default.hex}};
+@define-color card_fg_color {{colors.on_surface.default.hex}};
+
+@define-color dialog_bg_color {{colors.surface_container_high.default.hex}};
+@define-color dialog_fg_color {{colors.on_surface.default.hex}};
+
+@define-color popover_bg_color {{colors.surface_container_high.default.hex}};
+@define-color popover_fg_color {{colors.on_surface.default.hex}};
+
+@define-color thumbnail_bg_color {{colors.surface_container_highest.default.hex}};
+@define-color thumbnail_fg_color {{colors.on_surface.default.hex}};

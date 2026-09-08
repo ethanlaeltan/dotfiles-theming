@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# wofi front-end over theme-apply (the one actual theming pipeline -- see
+# ~/dotfiles-theming/README.md). Used to run its own parallel matugen
+# invocation seeded from a single primary hex via `dms matugen generate
+# --shell-dir /usr/share/quickshell/dms`, but dms-shell 1.6.0 (2026-09-05)
+# deleted that directory entirely (its matugen templates are now embedded in
+# the `dms` binary, and the CLI's own --shell-dir still hard-requires a real
+# template tree on disk), so that call now fails outright. Not worth
+# resurrecting a second copy of DMS's old template tree just to keep this
+# script's own weaker (single-seed, non-literal-palette) approach on life
+# support: theme-apply already does the same job -- and does it against the
+# full literal colorscheme, not just an HCT-derived guess from one color --
+# so this just becomes a picker in front of it.
+#
+# Usage:
+#   dms-theme-switcher            interactive wofi picker
+#   dms-theme-switcher <theme-id> apply a specific theme by its folder name
+#       (e.g. dms-theme-switcher voidmagenta), useful for a keybind or testing
+set -euo pipefail
+
+THEMES_DIR="$HOME/.config/DankMaterialShell/themes"
+
+# Only themes with a populated dark.primary are usable (e.g. "deepsage" is
+# currently an empty stub and is skipped).
+list_themes() {
+	for dir in "$THEMES_DIR"/*/; do
+		local primary
+		primary=$(jq -r '.dark.primary // empty' "$dir/theme.json" 2>/dev/null) || continue
+		[ -n "$primary" ] && jq -r '.name' "$dir/theme.json"
+	done
+}
+
+id_for_name() {
+	local target="$1" dir n
+	for dir in "$THEMES_DIR"/*/; do
+		n=$(jq -r '.name // empty' "$dir/theme.json" 2>/dev/null) || continue
+		if [ "$n" = "$target" ]; then
+			basename "$dir"
+			return 0
+		fi
+	done
+	return 1
+}
+
+main() {
+	if [ $# -ge 1 ]; then
+		exec theme-apply "$1"
+	fi
+
+	local chosen id
+	chosen=$(list_themes | wofi --dmenu --prompt "Theme" --cache-file /dev/null) || exit 0
+	[ -z "$chosen" ] && exit 0
+
+	id=$(id_for_name "$chosen") || { echo "Could not resolve theme: $chosen" >&2; exit 1; }
+	exec theme-apply "$id"
+}
+
+main "$@"

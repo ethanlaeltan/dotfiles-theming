@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# JSON list of available colorschemes, for the theme-switcher widget.
+# Each theme is a folder under ~/.config/colorschemes/<id>/ containing an
+# <id>.toml (plus its own wallpaper, DMS shell config, hypr snapshot, ...).
+set -euo pipefail
+python3 - "$HOME/.config/colorschemes" <<'PY'
+import sys, os, json, tomllib
+
+d = sys.argv[1]
+out = []
+if os.path.isdir(d):
+    for id in sorted(os.listdir(d)):
+        path = os.path.join(d, id, f"{id}.toml")
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, "rb") as f:
+                data = tomllib.load(f)
+        except Exception:
+            continue
+        if not data.get("primary"):
+            continue
+        out.append({
+            "id": id,
+            "name": data.get("name", id),
+            "primary": data.get("primary"),
+            "background": data.get("background", "#222222"),
+        })
+print(json.dumps(out))
+PY

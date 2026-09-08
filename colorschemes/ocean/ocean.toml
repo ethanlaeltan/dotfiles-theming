@@ -1,0 +1,53 @@
+# Ocean -- undersea palette extracted directly from the wallpaper (median-cut
+# quantization of ~/Pictures/Wallpapers/1304265.png's dominant clusters):
+#   the icy cyan-teal that covers most of the frame becomes primary, its
+#   darker/muted variants become background/surface/outline, and the fur/ice
+#   highlight grey becomes text. error/warning aren't in the wallpaper (no
+#   red or yellow in it) so they're a coral-reef red and a sandy gold instead,
+#   picked to still read as "undersea", not just generic Material alert colors.
+name = "Ocean"
+primary = "#4bafc3"
+background = "#0d1b1f"
+surface = "#293a40"
+outline = "#3d636e"
+text = "#b5bdbc"
+error = "#ff6b6b"
+warning = "#f4c15c"
+info = "#61939d"
+
+font = "Google Sans"
+
+# Papirus folder-icon color variant (`papirus-folders -l` for the full list)
+folder_color = "cyan"
+
+wallpaper = "/home/ethan/Pictures/Wallpapers/1304265.png"
+cmatrix_color = "cyan"
+
+# Material 3's own "large" component corner radius (also DMS's system
+# default, see SettingsSpec.js cornerRadius) -- rounds both the dank bar/
+# dock/widgets and Hyprland window corners, unlike every other theme here
+# which is intentionally sharp (radius 0).
+radius = 16
+
+# 16-color ANSI terminal palette (kitty), reinterpreted around the wallpaper's
+# teal core since the source image itself has no true green/yellow/magenta:
+# green -> kelp/seafoam, yellow -> sand, magenta -> bioluminescence, with
+# blue/cyan drawn straight from the two teal clusters (primary and a lighter
+# icy variant).
+[ansi]
+color0  = "#0d1b1f"
+color1  = "#ff6b6b"
+color2  = "#6dbfa0"
+color3  = "#f4c15c"
+color4  = "#4bafc3"
+color5  = "#8b7fd4"
+color6  = "#7fd8e8"
+color7  = "#c4d3d6"
+color8  = "#3d636e"
+color9  = "#ff8a8a"
+color10 = "#8fd9bd"
+color11 = "#ffd685"
+color12 = "#6dcfe3"
+color13 = "#a89bea"
+color14 = "#a3e8f0"
+color15 = "#e8f2f3"

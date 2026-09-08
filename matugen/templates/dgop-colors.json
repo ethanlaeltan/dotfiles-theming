@@ -1,0 +1,49 @@
+{
+  "ui": {
+    "border_primary": "{{colors.primary.default.hex}}",
+    "border_secondary": "{{colors.secondary.default.hex}}",
+    "header_background": "{{colors.primary.default.hex}}",
+    "header_text": "{{colors.background.default.hex}}",
+    "footer_background": "{{colors.surface.default.hex}}",
+    "footer_text": "{{colors.on_background.default.hex}}",
+    "text_primary": "{{colors.on_background.default.hex}}",
+    "text_secondary": "{{colors.on_background.default.hex}}",
+    "text_accent": "{{colors.primary.default.hex}}",
+    "selection_background": "{{colors.primary.default.hex}}",
+    "selection_text": "{{colors.background.default.hex}}"
+  },
+  "charts": {
+    "network_download": "{{colors.primary.default.hex}}",
+    "network_upload": "{{colors.surface.default.hex}}",
+    "network_line": "{{colors.secondary.default.hex}}",
+    "cpu_core_low": "{{colors.surface.default.hex}}",
+    "cpu_core_medium": "{{colors.primary.default.hex}}",
+    "cpu_core_high": "{{colors.secondary.default.hex}}",
+    "disk_read": "{{colors.primary.default.hex}}",
+    "disk_write": "{{colors.surface.default.hex}}"
+  },
+  "progress_bars": {
+    "memory_low": "{{colors.surface.default.hex}}",
+    "memory_medium": "{{colors.primary.default.hex}}",
+    "memory_high": "{{colors.secondary.default.hex}}",
+    "disk_low": "{{colors.surface.default.hex}}",
+    "disk_medium": "{{colors.primary.default.hex}}",
+    "disk_high": "{{colors.secondary.default.hex}}",
+    "cpu_low": "{{colors.surface.default.hex}}",
+    "cpu_medium": "{{colors.primary.default.hex}}",
+    "cpu_high": "{{colors.secondary.default.hex}}",
+    "progress_background": "{{colors.surface.default.hex}}"
+  },
+  "temperature": {
+    "cold": "{{colors.surface.default.hex}}",
+    "warm": "{{colors.primary.default.hex}}",
+    "hot": "{{colors.secondary.default.hex}}",
+    "danger": "{{colors.error.default.hex}}"
+  },
+  "status": {
+    "success": "#22C55E",
+    "warning": "#F59E0B",
+    "error": "{{colors.error.default.hex}}",
+    "info": "{{colors.primary.default.hex}}"
+  }
+}

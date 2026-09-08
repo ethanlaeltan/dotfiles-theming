@@ -1,0 +1,45 @@
+# Everforest (sainnhe/everforest) -- warm, forest-green, low-contrast.
+# Colors are the canonical Everforest "hard" palette:
+#   bg0 background, bg1 surface, bg3 outline, fg text,
+#   green primary, blue info, red error, yellow warning
+name = "Everforest"
+primary = "#a7c080"
+background = "#272e33"
+surface = "#2e383c"
+outline = "#414b4f"
+text = "#d3c6aa"
+error = "#e67e80"
+warning = "#dbbc7f"
+info = "#7fbbb3"
+
+# JetBrainsMono Nerd Font as DMS's own bar/system font is a deliberate choice
+# for this theme. Safe from the Firefox-oversizing bug now that
+# ~/.config/fontconfig/conf.d/999-real-sans-serif.conf pins the system-wide
+# sans-serif/serif aliases to a real font independent of this value.
+font = "JetBrainsMono Nerd Font"
+
+# Papirus folder-icon color variant (`papirus-folders -l` for the full list)
+folder_color = "green"
+
+wallpaper = "/home/ethan/.config/colorschemes/everforest/wallpaper.jpg"
+cmatrix_color = "green"
+
+# Real 16-color ANSI terminal palette (kitty), the standard Everforest
+# mapping -- https://github.com/sainnhe/everforest (hard contrast variant)
+[ansi]
+color0  = "#2e383c"
+color1  = "#e67e80"
+color2  = "#a7c080"
+color3  = "#dbbc7f"
+color4  = "#7fbbb3"
+color5  = "#d699b6"
+color6  = "#83c092"
+color7  = "#d3c6aa"
+color8  = "#859289"
+color9  = "#e67e80"
+color10 = "#a7c080"
+color11 = "#dbbc7f"
+color12 = "#7fbbb3"
+color13 = "#d699b6"
+color14 = "#83c092"
+color15 = "#d3c6aa"

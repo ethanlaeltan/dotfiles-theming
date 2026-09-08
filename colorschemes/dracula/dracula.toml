@@ -1,0 +1,51 @@
+# Dracula (draculatheme.com) -- dark, high-contrast, purple-accented.
+# Colors are the canonical Dracula palette:
+#   background background, current-line surface, comment outline,
+#   foreground text, purple primary, cyan info, red error, yellow warning
+name = "Dracula"
+primary = "#bd93f9"
+background = "#282a36"
+surface = "#44475a"
+outline = "#6272a4"
+text = "#f8f8f2"
+error = "#ff5555"
+warning = "#f1fa8c"
+info = "#8be9fd"
+
+# A real proportional sans font, not the JetBrainsMono Nerd Font fallback --
+# that fallback is meant for the terminal/mono role, but DMS Theme Sync
+# broadcasts whatever `font` is set to into fontconfig's system-wide
+# sans-serif/serif generic aliases (unconditionally, no toggle to scope it),
+# so a monospace value there leaks into Firefox and every other app that
+# falls back to "sans-serif" -- rendering visibly oversized since monospace
+# fonts have different metrics than a real proportional font at the same
+# point size. See nord.toml (Roboto) and ocean.toml (Google Sans).
+font = "Roboto"
+
+# Papirus folder-icon color variant (`papirus-folders -l` for the full list)
+folder_color = "violet"
+
+wallpaper = "/home/ethan/.config/colorschemes/dracula/wallpaper.jpg"
+cmatrix_color = "magenta"
+
+# Real 16-color ANSI terminal palette (kitty), the standard Dracula mapping --
+# https://draculatheme.com/contribute (blue slot is purple in the official
+# spec -- Dracula has no true blue, terminal apps that hardcode ANSI blue
+# still land on-theme this way).
+[ansi]
+color0  = "#21222c"
+color1  = "#ff5555"
+color2  = "#50fa7b"
+color3  = "#f1fa8c"
+color4  = "#bd93f9"
+color5  = "#ff79c6"
+color6  = "#8be9fd"
+color7  = "#f8f8f2"
+color8  = "#6272a4"
+color9  = "#ff6e6e"
+color10 = "#69ff94"
+color11 = "#ffffa5"
+color12 = "#d6acff"
+color13 = "#ff92df"
+color14 = "#a4ffff"
+color15 = "#ffffff"

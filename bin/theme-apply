@@ -1,0 +1,324 @@
+#!/usr/bin/env bash
+# Apply a colorscheme from ~/.config/colorschemes/<name>/<name>.toml system-wide:
+#   1. Set the wallpaper, if the theme defines one
+#   2. Sync DMS's own shell chrome (bar/dock/control-center) by writing a
+#      matching custom theme.json and switching currentThemeName
+#   3. Push the theme's font (default JetBrainsMono Nerd Font[ Mono]) to DMS
+#      settings and kitty, its Papirus folder-icon color if set, and its
+#      corner radius (default 0, sharp -- matches every theme predating this
+#      field) to both DMS's own widget/bar radius and Hyprland's window radius
+#   4. Restart the DMS shell -- it only reacts live to individual settings
+#      like colors/fontFamily, not to customThemeFile's on-disk content, so
+#      a "custom" theme's bar/dock/control-center chrome would otherwise
+#      keep rendering the previous theme until something else restarts it.
+#      This MUST happen before step 5: on startup DMS runs its own internal
+#      matugen regeneration (runDmsMatugenTemplates/runUserMatugenTemplates),
+#      which doesn't know how to source a color from a "custom" theme and
+#      falls back to a hardcoded Material blue -- clobbering GTK/Qt/Hyprland
+#      colors if it runs after ours.
+#   5. Render matugen templates (GTK3/4, Qt5ct/6ct, Hyprland, hyprtoolkit,
+#      kitty, starship) via our own ~/.config/matugen/config.toml, fed the
+#      toml's literal colors directly (not algorithmically derived from a
+#      seed -- see step 5 below). This must be the LAST writer of these
+#      files -- see step 4.
+#   6. Reload Hyprland so require("dms.colors") picks up the new borders
+#   7. Live-reload kitty (SIGUSR1) so already-open terminals pick up colors
+#
+# Usage: theme-apply <name>   (name of the folder under ~/.config/colorschemes,
+#                               e.g. `theme-apply dracula` for .../dracula/dracula.toml)
+set -euo pipefail
+
+SCHEMES_DIR="$HOME/.config/colorschemes"
+DMS_THEMES_DIR="$HOME/.config/DankMaterialShell/themes"
+KITTY_CONF="$HOME/.config/kitty/kitty.conf"
+
+id="${1:?Usage: theme-apply <name>}"
+scheme_file="$SCHEMES_DIR/$id/$id.toml"
+[ -f "$scheme_file" ] || { echo "No such colorscheme: $scheme_file" >&2; exit 1; }
+
+# --- 1. Parse the TOML (stdlib tomllib, no extra deps) -------------------
+eval "$(python3 - "$scheme_file" <<'PY'
+import sys, tomllib, shlex
+with open(sys.argv[1], "rb") as f:
+    d = tomllib.load(f)
+for key in ("name", "primary", "background", "surface", "outline", "text", "error", "warning", "info", "wallpaper"):
+    print(f"{key}={shlex.quote(str(d.get(key, '')))}")
+print(f"font={shlex.quote(str(d.get('font') or 'JetBrainsMono Nerd Font'))}")
+print(f"mono_font={shlex.quote(str(d.get('mono_font') or 'JetBrainsMono Nerd Font Mono'))}")
+print(f"folder_color={shlex.quote(str(d.get('folder_color') or ''))}")
+print(f"cmatrix_color={shlex.quote(str(d.get('cmatrix_color') or 'green'))}")
+print(f"radius={shlex.quote(str(d.get('radius', 0)))}")
+PY
+)"
+
+[ -n "$primary" ] || { echo "colorscheme '$id' has no primary color set" >&2; exit 1; }
+
+echo "Applying colorscheme: $name ($id)"
+
+# --- 2. Wallpaper ----------------------------------------------------------
+if [ -n "$wallpaper" ] && [ -f "$wallpaper" ]; then
+	dms ipc call wallpaper set "$wallpaper" >/dev/null 2>&1 || true
+fi
+
+# --- 3. Sync DMS's own shell chrome ----------------------------------------
+theme_json_dir="$DMS_THEMES_DIR/$id"
+mkdir -p "$theme_json_dir"
+python3 - "$theme_json_dir/theme.json" "$name" "$primary" "$background" "$surface" "$outline" "$text" "$error" "$warning" "$info" <<'PY'
+import json, sys
+path, name, primary, background, surface, outline, text, error, warning, info = sys.argv[1:]
+data = {
+    "id": name.lower().replace(" ", ""),
+    "name": name,
+    "version": "1.0.0",
+    "author": "theme-apply",
+    "description": f"{name} colorscheme, managed by ~/.config/colorschemes",
+    "dark": {
+        "primary": primary,
+        "primaryContainer": surface,
+        "secondary": info,
+        "surfaceText": text,
+        "surfaceVariantText": text,
+        "backgroundText": text,
+        "error": error,
+        "warning": warning,
+        "info": info,
+    },
+    "variants": {
+        "default": "hard",
+        "options": [{
+            "id": "hard",
+            "name": "Hard",
+            "dark": {
+                "primaryText": background,
+                "surface": surface,
+                "surfaceVariant": surface,
+                "surfaceTint": surface,
+                "background": background,
+                "outline": outline,
+                "surfaceContainer": surface,
+                "surfaceContainerHigh": surface,
+                "surfaceContainerHighest": surface,
+            },
+        }],
+    },
+}
+with open(path, "w") as f:
+    json.dump(data, f, indent=2)
+PY
+
+dms ipc call settings set customThemeFile "$theme_json_dir/theme.json" >/dev/null
+dms ipc call settings set currentThemeCategory custom >/dev/null
+# DMS's own Theme.qml only recognizes the literal string "custom" here (see
+# switchTheme()) -- the specific theme's identity lives in customThemeFile
+# above, not in this field. Setting this to e.g. "nord" instead falls through
+# to Theme.qml's generic/registry branch and silently resets
+# currentThemeCategory to "generic", rendering some unrelated stock theme.
+dms ipc call settings set currentThemeName custom >/dev/null
+
+# --- 3b. Font: DMS shell + kitty --------------------------------------------
+dms ipc call settings set fontFamily "$font" >/dev/null
+dms ipc call settings set monoFontFamily "$mono_font" >/dev/null
+
+if [ -f "$KITTY_CONF" ]; then
+	sed -i "s/^font_family\([[:space:]]*\)family=.*/font_family\1family=\"$mono_font\"/" "$KITTY_CONF"
+fi
+
+# --- 3b2. Corner radius: DMS bar/dock/widgets + Hyprland window corners ----
+# Set explicitly (not just when present in the toml) so switching to a theme
+# without a `radius` field actually resets to sharp, rather than leaking a
+# previous theme's rounded corners forward.
+dms ipc call settings set cornerRadius "$radius" >/dev/null
+dms ipc call settings set hyprlandLayoutRadiusOverride "$radius" >/dev/null
+
+# barConfigs' own squareCorners flag hardcodes the dank bar's outer shape to
+# sharp regardless of cornerRadius/Theme.cornerRadius (see BarCanvas.qml's
+# `rt` property). It's an array-typed setting, and DMSShellIPC.qml's `set`
+# handler explicitly refuses arrays/objects ("Setting Objects and Arrays not
+# supported") -- so this has to be patched directly in settings.json on disk
+# instead of through `settings set`. Do this LAST among settings edits, right
+# before the restart below: the running DMS process rewrites the whole file
+# from its in-memory state on every successful `settings set` above, which
+# would otherwise clobber this the moment it saves next.
+python3 -c '
+import json, sys
+path, radius = sys.argv[1], int(sys.argv[2])
+with open(path) as f:
+	data = json.load(f)
+for bar in data.get("barConfigs", []):
+	bar["squareCorners"] = radius <= 0
+with open(path, "w") as f:
+	json.dump(data, f, indent=2)
+' "$HOME/.config/DankMaterialShell/settings.json" "$radius"
+
+# --- 3c. Papirus folder icon color ------------------------------------------
+# Papirus-Dark lives under /usr/share/icons, so this needs root; papirus-folders
+# re-execs itself under sudo but passes through env vars this system's sudoers
+# rejects, so it's run pre-elevated here instead. `-n` uses only a cached sudo
+# credential and fails fast (no hang, no password prompt) if there isn't one.
+if [ -n "$folder_color" ] && command -v papirus-folders >/dev/null 2>&1; then
+	sudo -n papirus-folders -t Papirus-Dark -C "$folder_color" --update-caches >/dev/null 2>&1 || true
+fi
+
+# --- 4. Restart DMS shell (before matugen -- see header note) ---------------
+dms restart >/dev/null 2>&1 || true
+sleep 3
+
+# --- 5. matugen: GTK3/4, Qt5ct/6ct, Hyprland, hyprtoolkit -------------------
+# matugen normally *derives* a Material color scheme algorithmically from a
+# single seed color (HCT tonal generation), which doesn't reproduce the
+# toml's actual colors -- e.g. seeding from a saturated accent desaturates
+# it, and a real Nord seed drifts off the real Nord palette entirely.
+# Instead we expand the toml's 8 colors into every Material role matugen's
+# shared templates expect (simple deterministic blends for the in-between
+# "container" tones, no HCT involved) and feed that to `matugen json`, so
+# every template renders the theme's literal, real colors.
+colors_json="$(mktemp --suffix=.json)"
+trap 'rm -f "$colors_json"' EXIT
+
+python3 - "$colors_json" "$scheme_file" "$primary" "$background" "$surface" "$outline" "$text" "$error" "$warning" "$info" "$font" "$mono_font" "$wallpaper" "$cmatrix_color" <<'PY'
+import json, sys, tomllib
+
+path, scheme_file, primary, background, surface, outline, text, error, warning, info, font, mono_font, wallpaper, cmatrix_color = sys.argv[1:]
+
+def mix(a, b, t):
+	a = a.lstrip("#"); b = b.lstrip("#")
+	ar, ag, ab = int(a[0:2], 16), int(a[2:4], 16), int(a[4:6], 16)
+	br, bg, bb = int(b[0:2], 16), int(b[2:4], 16), int(b[4:6], 16)
+	r = round(ar + (br - ar) * t)
+	g = round(ag + (bg - ag) * t)
+	b_ = round(ab + (bb - ab) * t)
+	return f"#{r:02x}{g:02x}{b_:02x}"
+
+def scale(hexcolor, factor):
+	c = hexcolor.lstrip("#")
+	r, g, b = int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16)
+	r, g, b = (min(255, round(v / factor)) for v in (r, g, b))
+	return f"#{r:02x}{g:02x}{b:02x}"
+
+with open(scheme_file, "rb") as f:
+	toml_data = tomllib.load(f)
+
+# pywalfox's own color mapping (compiled into the extension, not overridable
+# via this json) brightens color0 by *1.25 for the toolbar/tabs/sidebar and
+# by *1.85 for the address/search field specifically -- feeding it the real
+# background made the search field far too bright (background*1.85). Default
+# to background/1.25, so toolbar/tabs land exactly on true background (flat,
+# dark) and the search field's *1.85 lands close to the theme's "surface"
+# tone instead of blowing out past it. A theme can set `pywalfox_color0`
+# explicitly in its toml to tune this further instead of relying on the formula.
+pywalfox_color0 = toml_data.get("pywalfox_color0") or scale(background, 1.25)
+
+surface_container_high = mix(surface, outline, 0.35)
+surface_container_highest = mix(surface, outline, 0.6)
+surface_bright = mix(surface, text, 0.15)
+tertiary = warning
+primary_container = mix(primary, surface, 0.5)
+secondary_container = mix(info, surface, 0.5)
+tertiary_container = mix(tertiary, surface, 0.5)
+error_container = mix(error, surface, 0.5)
+
+roles = {
+	"background": background, "on_background": text,
+	"surface": surface, "on_surface": text, "on_surface_variant": text,
+	"surface_variant": outline, "surface_bright": surface_bright, "surface_dim": background,
+	"surface_container_lowest": background, "surface_container_low": surface,
+	"surface_container": surface, "surface_container_high": surface_container_high,
+	"surface_container_highest": surface_container_highest,
+	"inverse_surface": text, "inverse_on_surface": background, "inverse_primary": primary,
+	"outline": outline, "outline_variant": surface_container_high,
+	"shadow": background, "scrim": background, "surface_tint": primary,
+	"primary": primary, "on_primary": background,
+	"primary_container": primary_container, "on_primary_container": text,
+	"primary_fixed": primary, "primary_fixed_dim": mix(primary, background, 0.3),
+	"on_primary_fixed": background, "on_primary_fixed_variant": background,
+	"secondary": info, "on_secondary": background,
+	"secondary_container": secondary_container, "on_secondary_container": text,
+	"secondary_fixed": info, "secondary_fixed_dim": mix(info, background, 0.3),
+	"on_secondary_fixed": background, "on_secondary_fixed_variant": background,
+	"tertiary": tertiary, "on_tertiary": background,
+	"tertiary_container": tertiary_container, "on_tertiary_container": text,
+	"tertiary_fixed": tertiary, "tertiary_fixed_dim": mix(tertiary, background, 0.3),
+	"on_tertiary_fixed": background, "on_tertiary_fixed_variant": background,
+	"error": error, "on_error": text,
+	"error_container": error_container, "on_error_container": text,
+	"source_color": primary,
+}
+
+colors = {role: {"dark": {"color": hexv}, "default": {"color": hexv}, "light": {"color": hexv}}
+          for role, hexv in roles.items()}
+
+# ANSI 16-color terminal palette (kitty). A theme can provide a real,
+# hue-accurate [ansi] table (color0..color15) in its toml -- our 8 base
+# colors don't have distinct green/yellow/cyan/magenta to derive those from.
+# Themes that don't define one get this same-hue reuse as a fallback so
+# kitty still renders in the theme's colors, just without true ANSI hues.
+ansi_table = toml_data.get("ansi")
+if ansi_table and all(f"color{i}" in ansi_table for i in range(16)):
+	ansi = {f"color{i}": ansi_table[f"color{i}"] for i in range(16)}
+else:
+	fallback = [background, error, info, warning, primary, primary, info, text,
+	            surface, error, info, warning, primary, primary, info, text]
+	ansi = {f"color{i}": hexv for i, hexv in enumerate(fallback)}
+
+json.dump({"colors": colors, "ansi": ansi, "is_dark_mode": True, "mode": "dark",
+           "font": font, "mono_font": mono_font, "image": wallpaper,
+           "pywalfox_color0": pywalfox_color0, "cmatrix_color": cmatrix_color}, open(path, "w"))
+PY
+
+matugen_rc=0
+matugen json "$colors_json" >/dev/null 2>&1 || matugen_rc=$?
+if [ "$matugen_rc" -ne 0 ]; then
+	echo "warning: matugen failed (exit $matugen_rc)" >&2
+fi
+
+# --- 5b. Push the new colors to already-open Firefox/Thunderbird tabs ------
+# pywalfox's socket path is hardcoded per-user, not per-browser (see
+# ~/.local/bin/pywalfox-thunderbird for the full explanation) -- whichever
+# browser's native-messaging daemon binds /tmp/pywalfox_socket_<uid> first
+# is the only one this reaches. Thunderbird's daemon runs under its own
+# TMPDIR (via its native-messaging-hosts/pywalfox.json pointing at that
+# wrapper instead of pywalfox directly), so it needs its own `update` call
+# under the same TMPDIR to be reached independently of Firefox's.
+if command -v pywalfox >/dev/null 2>&1; then
+	pywalfox update >/dev/null 2>&1 || true
+	TMPDIR=/tmp/thunderbird-pywalfox pywalfox update >/dev/null 2>&1 || true
+fi
+
+# --- 6. Hyprland reload (picks up the new require("dms.colors") output) ----
+hyprctl reload >/dev/null 2>&1 || true
+
+# --- 7. Live-reload kitty (SIGUSR1 is kitty's built-in config-reload signal) -
+pkill -SIGUSR1 -x kitty >/dev/null 2>&1 || true
+
+dms notify "Theme" "Switched to $name" >/dev/null 2>&1 || true
+
+# --- 8. Self-check: verify everything actually landed -----------------------
+# Backgrounded, with a delay: DMS Theme Sync's own autoSync reaction (cursor-
+# color matching, GTK chrome font-name guard correction, etc.) fires off
+# `dms restart` finishing and is asynchronous -- nothing above actually waits
+# for it, so checking immediately produces false-positive failures for things
+# that just haven't settled yet (matches the delay used throughout manual
+# testing this session before checks were reliable). Stays silent when
+# everything passes; only notifies -- and always logs the full report -- when
+# it catches something actually wrong, so this doesn't turn into per-switch
+# notification spam.
+if command -v theme-verify >/dev/null 2>&1; then
+	(
+		sleep 8
+		# theme-verify writes its own full report to this same path on every
+		# run now (regardless of how it's invoked), so nothing here needs to
+		# redirect its stdout to build the log -- just discard it and read
+		# theme-verify's own log back afterward.
+		verify_log="$HOME/.cache/theme-verify.log"
+		if ! theme-verify >/dev/null 2>&1; then
+			fail_count=$(grep -c '^\s*\[FAIL\]' "$verify_log" || true)
+			# Pull the check names straight out of theme-verify's own
+			# "what failed and where" summary (lines starting "  * ") instead
+			# of just a count, so the notification itself says what's wrong
+			# without needing to open the log first -- full detail/location
+			# for each is still in the log for when that's not enough.
+			failed_names=$(grep '^  \* ' "$verify_log" | sed 's/^  \* //' | paste -sd, - | sed 's/,/, /g')
+			dms notify "Theme verify: $fail_count failed" "$failed_names -- see $verify_log" >/dev/null 2>&1 || true
+		fi
+	) &
+fi

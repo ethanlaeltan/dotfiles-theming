@@ -1,0 +1,54 @@
+# Nord (arcticnordtheme.com) -- simple, clean, cool-toned.
+# Colors are the canonical Nord palette:
+#   nord0 background, nord1 surface, nord3 outline,
+#   nord4 text, nord8 primary (frost), nord9 info (frost),
+#   nord11 error (aurora red), nord13 warning (aurora yellow)
+name = "Nord"
+primary = "#88c0d0"
+background = "#2e3440"
+surface = "#3b4252"
+outline = "#4c566a"
+text = "#d8dee9"
+error = "#bf616a"
+warning = "#ebcb8b"
+info = "#81a1c1"
+
+font = "Roboto"
+mono_font = "RobotoMono Nerd Font Mono"
+
+# Papirus folder-icon color variant (`papirus-folders -l` for the full list)
+folder_color = "nordic"
+
+wallpaper = "/home/ethan/.config/colorschemes/nord/wallpaper.jpg"
+
+# Firefox/Thunderbird (pywalfox) seed color -- pywalfox brightens this by
+# *1.25 for the toolbar/tabs and *1.85 for the address/search field, so it's
+# picked deliberately, not just set to `background`: the search field is the
+# brighter of the two (*1.85), so #2e3440/1.85 lands the *field* on true
+# background (#2e3440), which puts the toolbar/tabs (*1.25) a bit darker
+# still (#1f232c). See theme-apply for the formula this overrides
+# (background/1.25) if you ever want to let it recompute.
+pywalfox_color0 = "#191c23"
+
+cmatrix_color = "cyan"
+
+# Real 16-color ANSI terminal palette (kitty), the standard Nord mapping --
+# https://www.nordtheme.com/docs/ports/kitty (nord0-15, colors 0-7 normal
+# match 8-15 bright except black/white, per the canonical Nord terminal spec)
+[ansi]
+color0  = "#3b4252"
+color1  = "#bf616a"
+color2  = "#a3be8c"
+color3  = "#ebcb8b"
+color4  = "#81a1c1"
+color5  = "#b48ead"
+color6  = "#88c0d0"
+color7  = "#e5e9f0"
+color8  = "#4c566a"
+color9  = "#bf616a"
+color10 = "#a3be8c"
+color11 = "#ebcb8b"
+color12 = "#81a1c1"
+color13 = "#b48ead"
+color14 = "#8fbcbb"
+color15 = "#eceff4"

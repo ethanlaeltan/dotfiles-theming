@@ -1,0 +1,23 @@
+# Void Magenta (your original rice; mirrors
+# ~/.config/DankMaterialShell/themes/voidmagenta/theme.json)
+name = "Void Magenta"
+primary = "#ff2bd6"
+background = "#08070a"
+surface = "#0b090d"
+outline = "#4a3f4d"
+text = "#eee6f0"
+error = "#ff4d6d"
+warning = "#ffb020"
+info = "#c792ea"
+
+# JetBrainsMono Nerd Font as DMS's own bar/system font is a deliberate choice
+# for this theme. Safe from the Firefox-oversizing bug now that
+# ~/.config/fontconfig/conf.d/999-real-sans-serif.conf pins the system-wide
+# sans-serif/serif aliases to a real font independent of this value.
+font = "JetBrainsMono Nerd Font"
+
+wallpaper = "/home/ethan/.config/colorschemes/voidmagenta/wallpaper.jpg"
+
+# Papirus folder-icon color variant (`papirus-folders -l` for the full list)
+folder_color = "magenta"
+cmatrix_color = "magenta"

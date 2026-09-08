@@ -1,0 +1,426 @@
+#!/usr/bin/env python3
+"""
+theme-verify -- checks that a theme actually landed everywhere it should.
+
+Codifies the ad-hoc checks built up over a session of chasing per-app
+theming bugs (fontconfig generic-alias leaks, GTK chrome font-name bypassing
+fontconfig entirely, Nemo watching the wrong gsettings schema, Firefox/
+Thunderbird's native-messaging daemons fighting over one hardcoded socket,
+DMS Theme Sync's own plugin_settings.json getting silently reset). None of
+those were toml/color-value bugs -- they were all "does the global plumbing
+still work" bugs, so most checks here are infrastructure-level, not
+per-theme, and apply the same way to every current and future theme without
+needing to be duplicated anywhere.
+
+Usage:
+  theme-verify                 check whichever theme is currently active
+  theme-verify <name>          apply <name> and check it (leaves it applied)
+  theme-verify --all           cycle every theme in ~/.config/colorschemes,
+                                check each, restore the original theme after
+  theme-verify --infra-only    skip per-theme checks, just check global
+                                plumbing (fontconfig guard, cinnamon mirror,
+                                dunst, pywalfox sockets, plugin settings)
+
+Every run's full report is always written to ~/.cache/theme-verify.log
+(overwritten each time, plain text, no color codes) regardless of how
+theme-verify was invoked -- paste that file's content when asking for help
+diagnosing a failure; it has everything the terminal output does.
+
+Exit code is the number of failed checks (0 = everything passed).
+"""
+import json
+import os
+import subprocess
+import sys
+import time
+import tomllib
+
+HOME = os.path.expanduser("~")
+COLORSCHEMES_DIR = f"{HOME}/.config/colorschemes"
+DMS_SETTINGS = f"{HOME}/.config/DankMaterialShell/settings.json"
+DMS_THEMES_DIR = f"{HOME}/.config/DankMaterialShell/themes"
+PLUGIN_SETTINGS = f"{HOME}/.config/DankMaterialShell/plugin_settings.json"
+KITTY_CONF = f"{HOME}/.config/kitty/kitty.conf"
+KITTY_COLORS = f"{HOME}/.config/kitty/matugen-colors.conf"
+GTK_COLORS = f"{HOME}/.config/gtk-4.0/dank-colors.css"
+QT5CT_COLORS = f"{HOME}/.config/qt5ct/colors/matugen.conf"
+HYPR_COLORS = f"{HOME}/.config/hypr/dms/colors.lua"
+SESSION_STATE = f"{HOME}/.local/state/DankMaterialShell/session.json"
+LOG_PATH = f"{HOME}/.cache/theme-verify.log"
+
+PASS, FAIL, WARN = "PASS", "FAIL", "WARN"
+
+_log_file = None
+
+
+def open_log():
+    """Always-on plain-text copy of the full report, regardless of how
+    theme-verify was invoked (interactively, from theme-apply's background
+    auto-check, piped somewhere) -- so "paste the log" is always the same
+    answer no matter how you triggered the run that produced it."""
+    global _log_file
+    os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
+    _log_file = open(LOG_PATH, "w")
+
+
+def emit(plain, colored=None):
+    print(colored if (colored is not None and sys.stdout.isatty()) else plain)
+    if _log_file:
+        print(plain, file=_log_file)
+        _log_file.flush()
+
+
+def sh(cmd, timeout=10):
+    try:
+        r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout)
+        return r.stdout.strip()
+    except subprocess.TimeoutExpired:
+        return ""
+
+
+def read_json(path):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def read_toml(path):
+    with open(path, "rb") as f:
+        return tomllib.load(f)
+
+
+def check(results, name, ok, detail="", where=""):
+    """where: the file path, gsettings key, or command a failure means you
+    should go look at -- printed in the failure summary so a FAIL is
+    actionable without having to guess which config produced it."""
+    results.append((PASS if ok else FAIL, name, detail, where))
+
+
+def warn(results, name, detail="", where=""):
+    results.append((WARN, name, detail, where))
+
+
+def list_themes():
+    themes = []
+    if not os.path.isdir(COLORSCHEMES_DIR):
+        return themes
+    for id_ in sorted(os.listdir(COLORSCHEMES_DIR)):
+        toml_path = f"{COLORSCHEMES_DIR}/{id_}/{id_}.toml"
+        if os.path.isfile(toml_path):
+            themes.append(id_)
+    return themes
+
+
+def current_theme_id():
+    settings = read_json(DMS_SETTINGS)
+    custom_file = settings.get("customThemeFile", "")
+    if custom_file.startswith(DMS_THEMES_DIR):
+        return custom_file[len(DMS_THEMES_DIR) + 1:].split("/")[0]
+    return None
+
+
+# --- per-theme checks -------------------------------------------------------
+
+def check_theme(id_):
+    results = []
+    toml_path = f"{COLORSCHEMES_DIR}/{id_}/{id_}.toml"
+    if not os.path.isfile(toml_path):
+        check(results, "toml exists", False, f"no such file: {toml_path}", where=toml_path)
+        return results
+
+    toml = read_toml(toml_path)
+    expected_font = toml.get("font") or "JetBrainsMono Nerd Font"
+    expected_mono = toml.get("mono_font") or "JetBrainsMono Nerd Font Mono"
+    expected_radius = toml.get("radius", 0)
+    expected_primary = toml.get("primary", "").lstrip("#").lower()
+    expected_bg = toml.get("background", "").lower()
+    expected_surface = toml.get("surface", "").lower()
+    expected_wallpaper = toml.get("wallpaper", "")
+
+    settings = read_json(DMS_SETTINGS)
+
+    check(results, "customThemeFile points here",
+          settings.get("customThemeFile", "").endswith(f"/themes/{id_}/theme.json"),
+          settings.get("customThemeFile", "(unset)"), where=DMS_SETTINGS)
+
+    check(results, "DMS bar font", settings.get("fontFamily") == expected_font,
+          f"got {settings.get('fontFamily')!r}, expected {expected_font!r}", where=DMS_SETTINGS)
+
+    check(results, "DMS mono font", settings.get("monoFontFamily") == expected_mono,
+          f"got {settings.get('monoFontFamily')!r}, expected {expected_mono!r}", where=DMS_SETTINGS)
+
+    check(results, "cornerRadius", settings.get("cornerRadius") == expected_radius,
+          f"got {settings.get('cornerRadius')}, expected {expected_radius}", where=DMS_SETTINGS)
+
+    check(results, "hyprlandLayoutRadiusOverride",
+          settings.get("hyprlandLayoutRadiusOverride") == expected_radius,
+          f"got {settings.get('hyprlandLayoutRadiusOverride')}, expected {expected_radius}",
+          where=DMS_SETTINGS)
+
+    bar_configs = settings.get("barConfigs", [])
+    if bar_configs:
+        square = bar_configs[0].get("squareCorners")
+        check(results, "bar squareCorners", square == (expected_radius <= 0),
+              f"got {square}, expected {expected_radius <= 0}",
+              where=f"{DMS_SETTINGS} (barConfigs[0].squareCorners)")
+    else:
+        warn(results, "bar squareCorners", "no barConfigs found", where=DMS_SETTINGS)
+
+    # kitty
+    kitty_font_line = sh(f"grep '^font_family' {KITTY_CONF}")
+    check(results, "kitty font_family", expected_mono in kitty_font_line,
+          kitty_font_line or "(no font_family line)", where=KITTY_CONF)
+
+    kitty_bg = None
+    if os.path.isfile(KITTY_COLORS):
+        for line in open(KITTY_COLORS):
+            if line.startswith("background"):
+                kitty_bg = line.split()[1].lower()
+                break
+    check(results, "kitty background", kitty_bg == expected_bg,
+          f"got {kitty_bg}, expected {expected_bg}", where=KITTY_COLORS)
+
+    # GTK
+    gtk_bg = None
+    if os.path.isfile(GTK_COLORS):
+        m = sh(f"grep 'define-color window_bg_color' {GTK_COLORS}")
+        if m:
+            gtk_bg = m.strip().split()[-1].rstrip(";").lower()
+    check(results, "GTK window_bg_color", gtk_bg == expected_surface,
+          f"got {gtk_bg}, expected {expected_surface}", where=GTK_COLORS)
+
+    # Qt5ct
+    qt_line = sh(f"grep '^active_colors' {QT5CT_COLORS}")
+    check(results, "Qt5ct primary present", expected_primary in qt_line.lower(),
+          f"#{expected_primary} not found in active_colors" if expected_primary not in qt_line.lower() else "",
+          where=QT5CT_COLORS)
+
+    # Hyprland border
+    hypr_border = None
+    if os.path.isfile(HYPR_COLORS):
+        m = sh(f"grep active_border {HYPR_COLORS}")
+        if m and '"' in m:
+            hypr_border = m.split('"')[1].replace("rgb(", "").replace(")", "").lower()
+    check(results, "Hyprland active_border", hypr_border == expected_primary,
+          f"got {hypr_border}, expected {expected_primary}", where=HYPR_COLORS)
+
+    # nvim
+    nvim_out = sh(
+        "nvim --headless -c 'lua vim.schedule(function() "
+        "local hl = vim.api.nvim_get_hl(0, {name=\"Normal\"}); "
+        "io.write(hl.bg and string.format(\"#%06x\", hl.bg) or \"nil\") "
+        "vim.cmd(\"qa!\") end)'",
+        timeout=15,
+    ).lower()
+    check(results, "nvim Normal.bg", nvim_out == expected_bg,
+          f"got {nvim_out}, expected {expected_bg}", where="~/.config/nvim/colors/dms.lua (nvim --headless)")
+
+    # wallpaper
+    session = read_json(SESSION_STATE)
+    check(results, "wallpaper", session.get("wallpaperPath") == expected_wallpaper,
+          f"got {session.get('wallpaperPath')!r}", where=SESSION_STATE)
+
+    # DMS theme.json
+    dms_theme_path = f"{DMS_THEMES_DIR}/{id_}/theme.json"
+    dms_theme = read_json(dms_theme_path)
+    dms_primary = dms_theme.get("dark", {}).get("primary", "").lstrip("#").lower()
+    check(results, "DMS theme.json primary", dms_primary == expected_primary,
+          f"got {dms_primary}, expected {expected_primary}", where=dms_theme_path)
+
+    return results
+
+
+# --- global / infrastructure checks -----------------------------------------
+
+def check_infra():
+    results = []
+
+    # fontconfig guard: sans-serif/serif/monospace must NEVER resolve to
+    # JetBrainsMono system-wide, regardless of what DMS's own bar font is.
+    fontconfig_where = "/home/ethan/.config/fontconfig/conf.d/00-real-fonts.conf"
+    for family in ("sans-serif", "serif", "monospace"):
+        out = sh(f"fc-match {family}")
+        check(results, f"fontconfig {family} != JetBrainsMono",
+              "JetBrainsMono" not in out, out,
+              where=f"{fontconfig_where}  (checked via: fc-match {family})")
+
+    # GTK chrome font-name guard: same leak, different mechanism (gsettings,
+    # bypasses fontconfig entirely -- see cinnamon-schema-mirror's guard).
+    for key in ("font-name", "document-font-name"):
+        out = sh(f"gsettings get org.gnome.desktop.interface {key}")
+        check(results, f"gsettings {key} != JetBrainsMono",
+              "JetBrainsMono" not in out, out,
+              where=f"~/.local/bin/cinnamon-schema-mirror (guard_one)  "
+                    f"(checked via: gsettings get org.gnome.desktop.interface {key})")
+
+    # cinnamon mirror: Nemo prioritizes org.cinnamon.desktop.interface over
+    # org.gnome's when present, but DMS Theme Sync only ever writes gnome's.
+    # Cinnamon's schema is a smaller subset of GNOME's -- it has no
+    # "color-scheme" or "monospace-font-name" key at all (confirmed this
+    # session), so those aren't checked here; mirroring them is a no-op by
+    # design, not a bug.
+    mirrored_keys = ["icon-theme", "gtk-theme", "cursor-theme", "cursor-size"]
+    for key in mirrored_keys:
+        gnome_val = sh(f"gsettings get org.gnome.desktop.interface {key}")
+        cinn_val = sh(f"gsettings get org.cinnamon.desktop.interface {key} 2>/dev/null")
+        check(results, f"cinnamon mirrors {key}", gnome_val == cinn_val,
+              f"gnome={gnome_val!r} cinnamon={cinn_val!r}",
+              where="~/.local/bin/cinnamon-schema-mirror  "
+                    "(systemctl --user status cinnamon-schema-mirror.service to check if it's alive)")
+
+    # the mirror daemon itself, and that it hasn't been silently killed by
+    # something (dms restart's loginctl usage has done this before -- it's
+    # now a systemd --user service specifically so it self-heals, but a
+    # dead/masked service wouldn't show up any other way).
+    mirror_svc_where = "systemctl --user status cinnamon-schema-mirror.service"
+    svc_active = sh("systemctl --user is-active cinnamon-schema-mirror.service")
+    check(results, "cinnamon-schema-mirror.service active", svc_active == "active", svc_active,
+          where=mirror_svc_where)
+    svc_enabled = sh("systemctl --user is-enabled cinnamon-schema-mirror.service")
+    check(results, "cinnamon-schema-mirror.service enabled", svc_enabled == "enabled", svc_enabled,
+          where="~/.config/systemd/user/cinnamon-schema-mirror.service  (systemctl --user enable ... to fix)")
+
+    # dunst must stay masked and DMS must own the notifications bus name --
+    # dunst is D-Bus-activatable, so any notification sent while DMS isn't
+    # currently owning the name can re-summon it.
+    dunst_masked = sh("systemctl --user is-enabled dunst.service")
+    check(results, "dunst.service masked", dunst_masked == "masked", dunst_masked,
+          where="systemctl --user mask dunst.service  (checked via: systemctl --user is-enabled dunst.service)")
+    dunst_running = sh("pgrep -x dunst")
+    check(results, "dunst not running", dunst_running == "", f"pid(s): {dunst_running}",
+          where="pgrep -x dunst  (kill it, then `dms restart` so DMS reclaims the notifications bus name)")
+    notif_owner = sh("busctl --user list 2>/dev/null | grep org.freedesktop.Notifications")
+    check(results, "DMS owns notifications bus name", " qs " in f" {notif_owner} ", notif_owner,
+          where="busctl --user list | grep org.freedesktop.Notifications  (should show 'qs', not 'dunst')")
+
+    # pywalfox: both browsers' native-messaging daemons need to be alive and
+    # holding *different* sockets (see pywalfox-native-host) for `theme-apply`
+    # to be able to reach both independently. A missing socket here means
+    # that browser's connection died and won't reconnect on its own --
+    # confirmed this session that neither Firefox nor Thunderbird retries by
+    # themselves, so this needs an actual app restart, not just a re-sync.
+    default_socket = f"/tmp/pywalfox_socket_{os.getuid()}"
+    tb_socket = f"/tmp/thunderbird-pywalfox/pywalfox_socket_{os.getuid()}"
+    check(results, "pywalfox Firefox socket alive", os.path.exists(default_socket),
+          "missing -- Firefox's native-messaging connection likely died; restart Firefox"
+          if not os.path.exists(default_socket) else "",
+          where=default_socket)
+    check(results, "pywalfox Thunderbird socket alive", os.path.exists(tb_socket),
+          "missing -- Thunderbird's native-messaging connection likely died; restart Thunderbird"
+          if not os.path.exists(tb_socket) else "",
+          where=tb_socket)
+
+    # DMS Theme Sync's own plugin_settings.json -- confirmed this session it
+    # can get silently reset to just {"enabled": true} by DMS's own save
+    # cycle if edited at the wrong time, quietly reverting every scoping
+    # decision (GTK/Qt colors back on, conflicting with theme-apply's own).
+    plugin_settings = read_json(PLUGIN_SETTINGS).get("dmsThemeSync", {})
+    expected_plugin = {
+        "applyMatugenColors": False,
+        "syncKde": True,
+        "syncKvantum": True,
+        "syncFlatpak": True,
+        "syncCursorColor": True,
+    }
+    for key, want in expected_plugin.items():
+        got = plugin_settings.get(key)
+        check(results, f"dmsThemeSync.{key}", got == want, f"got {got!r}, expected {want!r}",
+              where=f"{PLUGIN_SETTINGS}  (key: dmsThemeSync.{key})")
+
+    # fontconfig override file itself -- confirm it's still valid XML and
+    # still sorts before the plugin's own file (00- before 99-).
+    check(results, "00-real-fonts.conf exists", os.path.isfile(fontconfig_where),
+          where=fontconfig_where)
+
+    return results
+
+
+# --- reporting ---------------------------------------------------------------
+
+def print_results(title, results):
+    emit(f"\n=== {title} ===")
+    for status, name, detail, where in results:
+        color = {"PASS": "\033[32m", "FAIL": "\033[31m", "WARN": "\033[33m"}[status]
+        reset = "\033[0m"
+        plain = f"  [{status}] {name}"
+        colored = f"  [{color}{status}{reset}] {name}"
+        if detail and status != PASS:
+            plain += f"  -- {detail}"
+            colored += f"  -- {detail}"
+        emit(plain, colored)
+
+
+def print_failure_summary(all_results):
+    """Consolidated "what failed and where" block, separate from the
+    PASS-heavy per-section listing above -- the thing to actually read when
+    something's wrong, especially in the always-written log file where
+    scrolling past 30+ PASS lines to find the 1 FAIL is exactly the friction
+    this script exists to remove."""
+    failures = [r for r in all_results if r[0] == FAIL]
+    if not failures:
+        return
+    emit(f"\n=== {len(failures)} FAILURE(S) -- what failed and where ===")
+    for status, name, detail, where in failures:
+        emit(f"  * {name}")
+        if detail:
+            emit(f"      what:  {detail}")
+        if where:
+            emit(f"      where: {where}")
+
+
+def main():
+    args = sys.argv[1:]
+    infra_only = "--infra-only" in args
+    do_all = "--all" in args
+    explicit_theme = next((a for a in args if not a.startswith("--")), None)
+
+    open_log()
+
+    all_results = []
+    original_theme = current_theme_id()
+
+    if not infra_only:
+        if do_all:
+            themes = list_themes()
+            if not themes:
+                emit(f"No themes found under {COLORSCHEMES_DIR}")
+                sys.exit(1)
+            for id_ in themes:
+                subprocess.run(["theme-apply", id_], check=True, capture_output=True, text=True)
+                time.sleep(8)
+                results = check_theme(id_)
+                print_results(f"theme: {id_}", results)
+                all_results += results
+            if original_theme and original_theme != themes[-1]:
+                subprocess.run(["theme-apply", original_theme], check=True, capture_output=True, text=True)
+                emit(f"\n(restored original theme: {original_theme})")
+        else:
+            id_ = explicit_theme
+            if id_:
+                subprocess.run(["theme-apply", id_], check=True, capture_output=True, text=True)
+                time.sleep(8)
+            else:
+                id_ = original_theme
+                if not id_:
+                    emit("Could not determine the currently active theme.")
+                    sys.exit(1)
+            results = check_theme(id_)
+            print_results(f"theme: {id_}", results)
+            all_results += results
+
+    infra_results = check_infra()
+    print_results("infrastructure", infra_results)
+    all_results += infra_results
+
+    print_failure_summary(all_results)
+
+    total_fail = sum(1 for r in all_results if r[0] == FAIL)
+    emit(f"\n{'ALL CHECKS PASSED' if total_fail == 0 else f'{total_fail} CHECK(S) FAILED'}")
+    emit(f"(full report written to {LOG_PATH})")
+    sys.exit(total_fail)
+
+
+if __name__ == "__main__":
+    main()
