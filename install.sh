@@ -28,9 +28,19 @@ link() {
 link matugen                  "$HOME/.config/matugen"
 link colorschemes             "$HOME/.config/colorschemes"
 link quickshell-themeswitcher "$HOME/.config/quickshell/themeswitcher"
+link hypr/hyprland.lua        "$HOME/.config/hypr/hyprland.lua"
 mkdir -p "$HOME/.local/bin"
 for f in theme-apply theme-verify theme-list dms-theme-switcher; do
 	link "bin/$f" "$HOME/.local/bin/$f"
+done
+
+for f in settings.json clsettings.json plugin_settings.json; do
+	link "dankmaterialshell/$f" "$HOME/.config/DankMaterialShell/$f"
+done
+
+git -C "$REPO" submodule update --init --recursive
+for p in caffeineRedesigned dmsThemeSync enderPulse; do
+	link "plugins/$p" "$HOME/.config/DankMaterialShell/plugins/$p"
 done
 
 cat <<EOF

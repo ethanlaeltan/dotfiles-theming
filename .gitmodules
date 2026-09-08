@@ -1,0 +1,9 @@
+[submodule "plugins/caffeineRedesigned"]
+	path = plugins/caffeineRedesigned
+	url = https://github.com/JDKamalakar/DMS-Caffeine
+[submodule "plugins/dmsThemeSync"]
+	path = plugins/dmsThemeSync
+	url = https://github.com/arqueon/dms-theme-sync
+[submodule "plugins/enderPulse"]
+	path = plugins/enderPulse
+	url = https://github.com/iquantecho/enderpulse

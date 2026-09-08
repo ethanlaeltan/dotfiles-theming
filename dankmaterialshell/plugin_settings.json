@@ -1,0 +1,47 @@
+{
+  "enderPulse": {
+    "enabled": true,
+    "mode": "radial",
+    "palette": "material",
+    "glow": 70,
+    "variants": [
+      {
+        "id": "builtin_output",
+        "name": "System output",
+        "audioTarget": "system",
+        "audioBackend": "auto",
+        "customAudioSource": "",
+        "icon": "volume_up",
+        "description": "EnderPulse audio source: System output"
+      },
+      {
+        "id": "builtin_microphone",
+        "name": "Microphone input",
+        "audioTarget": "microphone",
+        "audioBackend": "auto",
+        "customAudioSource": "",
+        "icon": "mic",
+        "description": "EnderPulse audio source: Microphone input"
+      }
+    ]
+  },
+  "caffeineRedesigned": {
+    "enabled": true
+  },
+  "dmsThemeSync": {
+    "enabled": true,
+    "autoSync": true,
+    "applyMatugenColors": false,
+    "syncKde": true,
+    "syncKvantum": true,
+    "syncFlatpak": true,
+    "syncCursorColor": true,
+    "syncXsettingsd": true,
+    "syncTerminalFonts": false,
+    "syncFolderColor": false,
+    "backupEnabled": true,
+    "backupRetention": 10,
+    "cursorColorBaseTheme": "Sweet-cursors",
+    "monoFontSize": 11
+  }
+}
